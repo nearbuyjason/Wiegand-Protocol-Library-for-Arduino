@@ -100,7 +100,7 @@ bool WIEGAND::DoWiegandConversion ()
 	_sysTick=millis();
 	if ((_sysTick - _lastWiegand) > 25)								// if no more signal coming through after 25ms
 	{
-		if ((_bitCount==26) || (_bitCount==34) || (_bitCount==8)) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
+		if ((_bitCount==26) || (_bitCount==34) || (_bitCount==8) || (_bitCount==4)) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
 		{
 			_cardTemp >>= 1;			// shift right 1 bit to get back the real value - interrupt done 1 left shift in advance
 			if (_bitCount>32)			// bit count more than 32 bits, shift high bits right to make adjustment
@@ -143,6 +143,16 @@ bool WIEGAND::DoWiegandConversion ()
 					}
 					return true;
 				}
+			}
+			else if (_bitCount==4)		// keypress HID RPK40
+			{
+				// 4-bit keyboard data from HID RPK40, key is "NOT" of low nibble
+				_code = ~_cardTemp & 0x0f;
+				_wiegandType=_bitCount;
+				_bitCount=0;
+				_cardTemp=0;
+				_cardTempHigh=0;
+				return true;
 			}
 		}
 		else
