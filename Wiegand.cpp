@@ -5,7 +5,7 @@ unsigned long WIEGAND::_cardTemp=0;
 unsigned long WIEGAND::_lastWiegand=0;
 unsigned long WIEGAND::_sysTick=0;
 unsigned long WIEGAND::_code=0;
-int 		  WIEGAND::_bitCount=0;	
+int 		  WIEGAND::_bitCount=0;
 int			  WIEGAND::_wiegandType=0;
 
 WIEGAND::WIEGAND()
@@ -34,7 +34,7 @@ void WIEGAND::begin()
 	_cardTemp = 0;
 	_code = 0;
 	_wiegandType = 0;
-	_bitCount = 0;  
+	_bitCount = 0;
 	_sysTick=millis();
 	pinMode(D0Pin, INPUT);					// Set D0 pin as input
 	pinMode(D1Pin, INPUT);					// Set D1 pin as input
@@ -83,10 +83,17 @@ unsigned long WIEGAND::GetCardId (unsigned long *codehigh, unsigned long *codelo
 	if (bitlength==26)								// EM tag
 		cardID = (*codelow & 0x1FFFFFE) >>1;
 
-	if (bitlength==34)								// Mifare 
+	if (bitlength==34)								// Mifare
 	{
 		*codehigh = *codehigh & 0x03;				// only need the 2 LSB of the codehigh
-		*codehigh <<= 30;							// shift 2 LSB to MSB		
+		*codehigh <<= 30;							// shift 2 LSB to MSB
+		*codelow >>=1;
+		cardID = *codehigh | *codelow;
+	}
+	if (bitlength==36)								// XXX the other card I have
+	{
+		*codehigh = *codehigh & 0x0F;				// XXX this is made up from copy & paste of 34
+		*codehigh <<= 30;							// XXX this is made up from copy & paste of 34
 		*codelow >>=1;
 		cardID = *codehigh | *codelow;
 	}
@@ -96,17 +103,17 @@ unsigned long WIEGAND::GetCardId (unsigned long *codehigh, unsigned long *codelo
 bool WIEGAND::DoWiegandConversion ()
 {
 	unsigned long cardID;
-	
+
 	_sysTick=millis();
 	if ((_sysTick - _lastWiegand) > 25)								// if no more signal coming through after 25ms
 	{
-		if ((_bitCount==26) || (_bitCount==34) || (_bitCount==8) || (_bitCount==4)) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
+		if ((_bitCount==26) || (_bitCount==34) || (_bitCount==36) || (_bitCount==8) || (_bitCount==4)) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
 		{
 			_cardTemp >>= 1;			// shift right 1 bit to get back the real value - interrupt done 1 left shift in advance
 			if (_bitCount>32)			// bit count more than 32 bits, shift high bits right to make adjustment
-				_cardTempHigh >>= 1;	
+				_cardTempHigh >>= 1;
 
-			if((_bitCount==26) || (_bitCount==34))		// wiegand 26 or wiegand 34
+			if((_bitCount==26) || (_bitCount==34) || (_bitCount==36))		// wiegand 26 or wiegand 34
 			{
 				cardID = GetCardId (&_cardTempHigh, &_cardTemp, _bitCount);
 				_wiegandType=_bitCount;
@@ -114,28 +121,28 @@ bool WIEGAND::DoWiegandConversion ()
 				_cardTemp=0;
 				_cardTempHigh=0;
 				_code=cardID;
-				return true;				
+				return true;
 			}
 			else if (_bitCount==8)		// keypress wiegand
 			{
 				// 8-bit Wiegand keyboard data, high nibble is the "NOT" of low nibble
-				// eg if key 1 pressed, data=E1 in binary 11100001 , high nibble=1110 , low nibble = 0001 
+				// eg if key 1 pressed, data=E1 in binary 11100001 , high nibble=1110 , low nibble = 0001
 				char highNibble = (_cardTemp & 0xf0) >>4;
 				char lowNibble = (_cardTemp & 0x0f);
-				_wiegandType=_bitCount;					
+				_wiegandType=_bitCount;
 				_bitCount=0;
 				_cardTemp=0;
 				_cardTempHigh=0;
-				
+
 				if (lowNibble == (~highNibble & 0x0f))		// check if low nibble matches the "NOT" of high nibble.
 				{
 					if (lowNibble==0x0b)					// ENT pressed
 					{
-						_code=0x0d;							
+						_code=0x0d;
 					}
 					else if (lowNibble==0x0a)				// ESC pressed
 					{
-						_code=0x1b;							
+						_code=0x1b;
 					}
 					else
 					{
@@ -158,12 +165,16 @@ bool WIEGAND::DoWiegandConversion ()
 		else
 		{
 			// well time over 25 ms and bitCount !=8 , !=26, !=34 , must be noise or nothing then.
+			if (_bitCount > 0) {
+				Serial.print("Got _bitCount ");
+				Serial.println(_bitCount);
+			}
 			_lastWiegand=_sysTick;
-			_bitCount=0;			
+			_bitCount=0;
 			_cardTemp=0;
 			_cardTempHigh=0;
 			return false;
-		}	
+		}
 	}
 	else
 		return false;
